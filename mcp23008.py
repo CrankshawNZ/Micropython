@@ -25,10 +25,10 @@ class MCP23008(object):
         self._registers['OLAT'] = 10   # b'\x0A'
 
         # I2C Address
-        self._address = address  # b'\x20' = 32.  so 32+ for addresses
+        self._address = address        # b'\x20' = 32.  so 32+ for addresses
 
         # I2C Object
-        if i2c == None:   # A default that is useful during dev
+        if i2c == None:                # A default that is useful during dev
             self._i2c = I2C(scl=Pin(4), sda=Pin(5), freq=100000)
         else:
             self._i2c = i2c
@@ -46,13 +46,14 @@ class MCP23008(object):
         input. When a bit is clear, the corresponding pin
         becomes an output"""
 
-        print ("IODIR getter called")
+        #print ("IODIR getter called")
         # read i2c
         return self._i2c.readfrom_mem(self._address, self._registers['IODIR'], 1 )
 
     @IODIR.setter
     def IODIR(self, value):
-        print ("IODIR setter called with value: %s" % value)
+        #print ("IODIR setter called with value: %s" % value)
+        
         # set i2c
         self._i2c.writeto_mem(self._address, self._registers['IODIR'], value)
 
@@ -199,27 +200,27 @@ class MCP23008(object):
 
 
     @property
-    def GPPU():
+    def GPPU(self):
         """The GPPU register controls the pull-up resistors for the
         port pins. If a bit is set and the corresponding pin is
         configured as an input, the corresponding port pin is
         internally pulled up with a 100 kohm resistor."""
 
-        print ("GPPU getter called")
+        # print ("GPPU getter called")
         # read from i2c
         return self._i2c.readfrom_mem(self._address, self._registers['GPPU'], 1 )
 
     @GPPU.setter
     def GPPU(self, value):
 
-        print ("GPPU setter called")
+        # print ("GPPU setter called")
         # set to i2c
         self._i2c.writeto_mem(self._address, self._registers['GPPU'], value)
 
 
 
     @property
-    def INTF():
+    def INTF(self):
         """The INTF register reflects the interrupt condition on the
         port pins of any pin that is enabled for interrupts via the
         GPINTEN register. A 'set' bit indicates that the associated
@@ -254,13 +255,13 @@ class MCP23008(object):
         Reading from this register reads the port. Writing to this
         register modifies the Output Latch (OLAT) register."""
 
-        print ("GPIO getter called")
+        # print ("GPIO getter called")
         # read i2c
         return self._i2c.readfrom_mem(self._address, self._registers['GPIO'], 1 )
 
     @GPIO.setter
     def GPIO(self, value):
-        print ("GPIO setter called")
+        # print ("GPIO setter called")
         # set i2c
         self._i2c.writeto_mem(self._address, self._registers['GPIO'], value)
 
@@ -319,46 +320,63 @@ class MCP23008(object):
            Pin: 0 - 7
            Direction: [ 0, 1 ]"""
 
-        bit = pin
-
         # Get current state.
         current_state = self.IODIR
 
         # Flip the corresponding bit for the pin (yay for 1 to 1 pin/bit mapping)
         if direction == 0:
-            self.IODIR = self._setBitLow(current_state, bit)
+            self.IODIR = self._setBitLow(current_state, pin)
         elif direction == 1:
-            self.IODIR = self._setBitHigh(current_state, bit)
+            self.IODIR = self._setBitHigh(current_state, pin)
 
         return
-    
-    def setPinLow(self, pin_number):
 
+
+    def setPullupOn(self,pin):
+        """Turn on the pullup resistor for pin """
+        current_state = self.GPPU
+        self.GPPU = self._setBitHigh(current_state, pin)
+
+    def setPullupOff(self,pin):
+        """Turn off the pullup resistor for pin """
+        current_state = self.GPPU
+        self.GPPU = self._setBitHigh(current_state, pin)
+
+
+    def setDefaultLow(self, pin):
+        """Set default value for pin to low. Used to compare against for
+        interupt generation"""
+        current_state = self.DEFVAL
+        self.DEFVAL = self._setBitLow(current_state, pin)
+
+    def setDefaultHigh(self, pin):
+        """Set default value for pin to high. Used to compare against for
+        interupt generation"""
+        current_state = self.DEFVAL
+        self.DEFVAL = self._setBitHigh(current_state, pin)
+
+
+    def setPinLow(self, pin):
+        """Set a pin to low """
         # Get current state.
         current_state = self.OLAT
-
         # Set bit for pin.
-        self.OLAT = self._setBitLow(current_state, pin_number)
-        
-        return
+        self.OLAT = self._setBitLow(current_state, pin)
 
-    def setPinHigh(self, pin_number):
-
+    def setPinHigh(self, pin):
+        """Set a pin to high """
         # Get current state.
         current_state = self.OLAT
-
         # Set bit for pin and apply to register
-        self.OLAT = self._setBitHigh(current_state, pin_number)
-        
-        return
+        self.OLAT = self._setBitHigh(current_state, pin)
 
-    def readPin(self, pin_number):
 
+    def readPin(self, pin):
+        """Return low(0)/high(1) state for pin"""
         # Get current state.
         current_state = self.GPIO
-
         # Get bit for pin.
-        bit = 1 << pin_number
+        bit = 1 << pin
 
         # Check if bit was up or down by AND'ing the isolated bit
         if (current_state[0] & bit == 0):
