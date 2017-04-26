@@ -24,6 +24,11 @@ class MCP23008(object):
         self._registers['GPIO'] = 9    # b'\x09'
         self._registers['OLAT'] = 10   # b'\x0A'
 
+        # Premake some buffers for interrupt safeness, only the likely ones for now
+        self._intcap_buf = bytearray(1)
+        self._intf_buf = bytearray(1)
+        self._gpio_buf = bytearray(1)
+
         # I2C Address
         self._address = address        # b'\x20' = 32.  so 32+ for addresses
 
@@ -54,7 +59,7 @@ class MCP23008(object):
     def IODIR(self, value):
         #print ("IODIR setter called with value: %s" % value)
         
-        # set i2c
+        # write to i2c
         self._i2c.writeto_mem(self._address, self._registers['IODIR'], value)
 
 
@@ -66,15 +71,15 @@ class MCP23008(object):
         If a bit is set, the corresponding GPIO register bit will
         reflect the inverted value on the pin. """
 
-        print ("IPOL getter called")
+        #print ("IPOL getter called")
         # read i2c
         return self._i2c.readfrom_mem(self._address, self._registers['IPOL'], 1 )
 
     @IPOL.setter
     def IPOL(self, value):
 
-        print ("IPOL setter called")
-        # set i2c
+        #print ("IPOL setter called")
+        # write to i2c
         self._i2c.writeto_mem(self._address, self._registers['IPOL'], value)
 
 
@@ -87,14 +92,14 @@ class MCP23008(object):
         registers must also be configured if any pins are
         enabled for interrupt-on-change."""
 
-        print ("GPINTEN getter called")
+        #print ("GPINTEN getter called")
         # read i2c
         return self._i2c.readfrom_mem(self._address, self._registers['GPINTEN'], 1 )
 
     @GPINTEN.setter
     def GPINTEN(self, value):
-        print ("GPINTEN setter called")
-        # set i2c
+        #print ("GPINTEN setter called")
+        # write to i2c
         self._i2c.writeto_mem(self._address, self._registers['GPINTEN'], value)
 
 
@@ -107,15 +112,15 @@ class MCP23008(object):
         opposite value on the associated pin will cause an
         interrupt to occur"""
 
-        print ("DEFVAL getter called")
+        #print ("DEFVAL getter called")
         # read from i2c
         return self._i2c.readfrom_mem(self._address, self._registers['DEFVAL'], 1 )
 
     @DEFVAL.setter
     def DEFVAL(self, value):
 
-        print ("DEFVAL setter called")
-        # set to i2c
+        #print ("DEFVAL setter called")
+        # write to i2c
         self._i2c.writeto_mem(self._address, self._registers['DEFVAL'], value)
 
 
@@ -129,15 +134,15 @@ class MCP23008(object):
         bit value is clear, the corresponding I/O pin is compared
         against the previous value."""
 
-        print ("INTCON getter called")
+        #print ("INTCON getter called")
         # read from i2c
         return self._i2c.readfrom_mem(self._address, self._registers['INTCON'], 1 )
 
     @INTCON.setter
     def INTCON(self, value):
 
-        print ("INTCON setter called")
-        # set to i2c
+        #print ("INTCON setter called")
+        # write to i2c
         self._i2c.writeto_mem(self._address, self._registers['INTCON'], value)
 
 
@@ -186,15 +191,15 @@ class MCP23008(object):
         1 = Active-high.
         0 = Active-low. """
 
-        print ("IOCON getter called")
+        #print ("IOCON getter called")
         # read from i2c
         return self._i2c.readfrom_mem(self._address, self._registers['IOCON'], 1 )
 
     @IOCON.setter
     def IOCON(self, value):
 
-        print ("IOCON setter called")
-        # set to i2c
+        #print ("IOCON setter called")
+        # write to i2c
         self._i2c.writeto_mem(self._address, self._registers['IOCON'], value)
 
 
@@ -214,7 +219,7 @@ class MCP23008(object):
     def GPPU(self, value):
 
         # print ("GPPU setter called")
-        # set to i2c
+        # write to i2c
         self._i2c.writeto_mem(self._address, self._registers['GPPU'], value)
 
 
@@ -229,9 +234,11 @@ class MCP23008(object):
         This register is 'read-only'. Writes to this register will be
         ignored."""
 
-        print ("INTF getter called")
-        # read from i2c
-        return self._i2c.readfrom_mem(self._address, self._registers['INTF'], 1 )
+        #print ("INTF getter called")
+        # read from i2c - Use an existing buf to be interrupt safe
+
+        self._i2c.readfrom_mem_into(self._address, self._registers['INTF'], self._intf_buf )
+        return self._intf_buf
 
 
 
@@ -243,10 +250,11 @@ class MCP23008(object):
         register will remain unchanged until the interrupt is
         cleared via a read of INTCAP or GPIO."""
 
-        print ("INTCAP getter called")
-        # read i2c
-        return self._i2c.readfrom_mem(self._address, self._registers['INTCAP'], 1 )
+        #print ("INTCAP getter called")
+        # read via i2c - Use an existing buf to be interrupt safe
 
+        self._i2c.readfrom_mem_into(self._address, self._registers['INTCAP'], self._intcap_buf )
+        return self._intcap_buf
 
 
     @property
@@ -254,17 +262,14 @@ class MCP23008(object):
         """The GPIO register reflects the value on the port.
         Reading from this register reads the port. Writing to this
         register modifies the Output Latch (OLAT) register."""
-
         # print ("GPIO getter called")
-        # read i2c
-        return self._i2c.readfrom_mem(self._address, self._registers['GPIO'], 1 )
+        self._i2c.readfrom_mem_into(self._address, self._registers['GPIO'], self._gpio_buf )
+        return self._gpio_buf
 
     @GPIO.setter
     def GPIO(self, value):
         # print ("GPIO setter called")
-        # set i2c
         self._i2c.writeto_mem(self._address, self._registers['GPIO'], value)
-
 
 
     @property
@@ -274,15 +279,12 @@ class MCP23008(object):
         OLAT and not the port itself. A write to this register
         modifies the output latches that modify the pins
         configured as outputs. """
-
-        print ("OLAT getter called")
-        # read i2c
+        #print ("OLAT getter called")
         return self._i2c.readfrom_mem(self._address, self._registers['OLAT'], 1 )
 
     @OLAT.setter
     def OLAT(self, value):
-        print ("OLAT setter called")
-        # set i2c
+        #print ("OLAT setter called")
         self._i2c.writeto_mem(self._address, self._registers['OLAT'], value)
 
 
@@ -304,7 +306,7 @@ class MCP23008(object):
 
         # Build a zero at right position
         bit = 1 << bit_num
-        
+
         # AND against the inverted bit
         out_buf = buf[0] & ~(bit)
 
@@ -312,7 +314,7 @@ class MCP23008(object):
 
 
     ########
-    ## Convenience Methods
+    ## Convenience Methods to deal with individual pins.
     #######
 
     def setPinDir(self, pin, direction):
@@ -329,9 +331,8 @@ class MCP23008(object):
         elif direction == 1:
             self.IODIR = self._setBitHigh(current_state, pin)
 
-        return
 
-
+    # Pullup resistors
     def setPullupOn(self,pin):
         """Turn on the pullup resistor for pin """
         current_state = self.GPPU
@@ -342,7 +343,7 @@ class MCP23008(object):
         current_state = self.GPPU
         self.GPPU = self._setBitHigh(current_state, pin)
 
-
+    # Setting default values for interrupt comparisons.
     def setDefaultLow(self, pin):
         """Set default value for pin to low. Used to compare against for
         interupt generation"""
@@ -355,7 +356,7 @@ class MCP23008(object):
         current_state = self.DEFVAL
         self.DEFVAL = self._setBitHigh(current_state, pin)
 
-
+    # Setting output pins high/low
     def setPinLow(self, pin):
         """Set a pin to low """
         # Get current state.
@@ -373,13 +374,10 @@ class MCP23008(object):
 
     def readPin(self, pin):
         """Return low(0)/high(1) state for pin"""
-        # Get current state.
-        current_state = self.GPIO
-        # Get bit for pin.
-        bit = 1 << pin
 
-        # Check if bit was up or down by AND'ing the isolated bit
-        if (current_state[0] & bit == 0):
+        # Check if bit was up or down by AND'ing the isolated bit.
+        # Crammed in like this to avoid allocating me (so it's interrupt safe)
+        if (self.GPIO[0] & (1 << pin)) == 0:
             return 0
         else:
             return 1
